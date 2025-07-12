@@ -1,10 +1,11 @@
-import os
-from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
 
-# .env 파일에서 환경 변수를 로드합니다.
-load_dotenv()
+class Settings(BaseSettings):
+    DATABASE_URL: str
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+    class Config:
+        env_file = ".env"
+        # 아래 한 줄을 추가합니다.
+        extra = "ignore"
+
+settings = Settings()
