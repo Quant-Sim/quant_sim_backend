@@ -3,7 +3,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.db import models
 from app.db.database import engine
-from app.api import auth
+from app.api.v1.endpoints import auth
 from app.services.scheduler import generate_and_store_random_number
 
 # 데이터베이스 테이블 생성
@@ -37,8 +37,7 @@ def shutdown_event():
     scheduler.shutdown()
     print("Scheduler shut down.")
 
-# 인증 API 라우터 포함
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(auth.router, prefix="/api/v1")
 
 @app.get("/")
 def read_root():
