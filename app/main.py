@@ -30,7 +30,7 @@ app.add_middleware(
 )
 
 # 라우터 연결
-app.include_router(orders.router, prefix="/api/order")
+app.include_router(orders.router, prefix="/api/backend/order")
 # websocket.py의 router를 최상위 경로에 연결합니다.
 # 이렇게 하면 /ws 로 접속할 수 있습니다.
 app.include_router(websocket.router)
