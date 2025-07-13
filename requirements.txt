@@ -8,3 +8,6 @@ passlib[bcrypt]
 python-dotenv
 apscheduler
 python-multipart
+sqlalchemy
+pydantic_settings
+asyncpg

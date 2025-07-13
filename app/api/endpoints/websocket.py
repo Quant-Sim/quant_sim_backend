@@ -29,7 +29,7 @@ async def price_generator():
             candle=PriceBase(time=t, open=open_price, high=high_price, low=low_price, close=close_price),
             volume=VolumeBase(time=t, value=random.randint(50, 150), color="#26a69a" if close_price >= open_price else "#ef5350")
         )
-        
+
         async with AsyncSessionLocal() as db:
             await crud_price.create_price_record(db, price_update)
 
