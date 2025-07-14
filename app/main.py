@@ -1,10 +1,14 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 
 from app.database import Base, engine
 from app.api.endpoints import websocket, orders, user
+from dotenv import load_dotenv
 
+load_dotenv()
 async def create_db_and_tables():
     """서버 시작 시 데이터베이스에 모든 테이블을 생성합니다."""
     async with engine.begin() as conn:
@@ -16,7 +20,7 @@ app = FastAPI(docs_url='/api/backend/docs')
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 실제 프로덕션에서는 특정 도메인만 허용하세요.
+    allow_origins=["*"],  # 실제 프로덕션에서는 특정 도메인만 허용하세요.
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,9 +33,11 @@ app.include_router(user.router, prefix="/api/backend/user")
 # 이렇게 하면 /ws 로 접속할 수 있습니다.
 app.include_router(websocket.router)
 
+
 @app.on_event("startup")
 async def on_startup():
     # 서버 시작 시 DB 테이블 생성
     await create_db_and_tables()
     # 백그라운드에서 가격 생성기 실행
     asyncio.create_task(websocket.price_generator())
+    asyncio.create_task(websocket.news_generator())

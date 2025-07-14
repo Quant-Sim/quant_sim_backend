@@ -12,3 +12,4 @@ sqlalchemy
 pydantic_settings
 asyncpg
 greenlet
+openai

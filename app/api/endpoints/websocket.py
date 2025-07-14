@@ -1,14 +1,23 @@
+import os
+
 from fastapi import APIRouter, WebSocket, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.session import get_db, AsyncSessionLocal
 from app.crud import crud_price
+from app.schemas.news import News
 from app.schemas.price import PriceUpdate, PriceBase, VolumeBase
 import asyncio
 import random
 import time
+import uuid
+from openai import OpenAI
 
 router = APIRouter()
 clients = set()
+news_clients = set()
+last_news = None
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 
 async def price_generator():
     print("📈 Price generator started")
@@ -27,7 +36,8 @@ async def price_generator():
 
         price_update = PriceUpdate(
             candle=PriceBase(time=t, open=open_price, high=high_price, low=low_price, close=close_price),
-            volume=VolumeBase(time=t, value=random.randint(50, 150), color="#26a69a" if close_price >= open_price else "#ef5350")
+            volume=VolumeBase(time=t, value=random.randint(50, 150),
+                              color="#26a69a" if close_price >= open_price else "#ef5350")
         )
 
         async with AsyncSessionLocal() as db:
@@ -42,6 +52,78 @@ async def price_generator():
         clients.difference_update(dead_clients)
         last_price = close_price
 
+
+async def news_generator():
+    global latest_news
+    headlines = [
+        "신제품 출시로 매출 기대감 ↑",
+        "CEO 교체 발표, 경영 전략 변화 예고",
+        "글로벌 공급망 개선, 수익성 회복 조짐",
+        "시장 점유율 하락 우려",
+        "경기 침체 우려로 투자심리 위축",
+    ]
+
+    while True:
+        print("📰 News generating...")
+        await asyncio.sleep(random.randint(20, 40))  # 뉴스 간격
+
+        prompt = random.choice(headlines)
+
+        model = "gpt-4"  # 최신 모델 사용
+        messages = [
+            {"role": "system",
+             "content": "주식 시장 관련 헤드라인을 1개 작성해줘. 헤드라인은 20자 이내고 주목을 끌어야 하며, 긍정적 또는 부정적인 영향을 줄 수 있어야 해. 내용은 실제 주식 종목이나 실제 기업, 실제 인물 실명을 언급하지 말고 만들어줘"
+                        "예시 :"
+                        "신제품 출시로 매출 기대감 ↑"
+                        "CEO 교체 발표, 경영 전략 변화 예고"
+                        "글로벌 공급망 개선, 수익성 회복 조짐"
+                        "시장 점유율 하락 우려"
+                        "경기 침체 우려로 투자심리 위축"
+                        "미 대통령, 기업 세금 인상 제안으로 주식 시장 흔들"
+             },
+            {"role": "user",
+             "content": prompt},
+        ]
+        response_format = {"type": "text"}
+
+        try:
+            response = openai_client.chat.completions.create(
+                model=model,
+                response_format=response_format,
+                messages=messages
+            )
+            # 응답 객체가 예상대로 왔는지 확인
+            if response and response.choices and response.choices[0].message.content:
+                headline = response.choices[0].message.content.strip()
+            else:
+                headline = "기본 헤드라인입니다."  # fallback
+        except Exception as e:
+            print("OpenAI 오류:", e)
+            headline = prompt  # fallback
+
+        # 감정 및 영향도 계산
+        sentiment = round(random.uniform(-1, 1), 2)
+        impact = random.randint(1, 10)
+
+        news = News(
+            id=str(uuid.uuid4()),
+            headline=headline,
+            sentiment=sentiment,
+            impact=impact,
+            timestamp=int(time.time())
+        )
+        latest_news = news
+
+        dead = set()
+        for client in news_clients:
+            try:
+                await client.send_json(news.dict())
+            except:
+                dead.add(client)
+        news_clients.difference_update(dead)
+        print("📢 뉴스 전송됨:", news.headline)
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
     await websocket.accept()
@@ -50,7 +132,8 @@ async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(ge
         history = await crud_price.get_recent_price_history(db, seconds=1200)
         for record in history:
             price_update = PriceUpdate(
-                candle=PriceBase(time=record.time, open=record.open, high=record.high, low=record.low, close=record.close),
+                candle=PriceBase(time=record.time, open=record.open, high=record.high, low=record.low,
+                                 close=record.close),
                 volume=VolumeBase(time=record.time, value=record.volume, color=record.color),
                 initial=True
             )
@@ -61,3 +144,16 @@ async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(ge
             await websocket.receive_text()
     except Exception:
         clients.remove(websocket)
+
+
+@router.websocket("/ws/news")
+async def websocket_news(websocket: WebSocket):
+    await websocket.accept()
+    news_clients.add(websocket)
+    try:
+        if latest_news:
+            await websocket.send_json(latest_news.dict())
+        while True:
+            await websocket.receive_text()
+    except:
+        news_clients.remove(websocket)
