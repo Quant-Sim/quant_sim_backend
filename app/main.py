@@ -11,7 +11,7 @@ async def create_db_and_tables():
         # Base.metadata는 models.py에 정의된 모든 테이블 정보를 담고 있습니다.
         await conn.run_sync(Base.metadata.create_all)
 
-app = FastAPI()
+app = FastAPI(docs_url='/api/backend/docs')
 
 # CORS 설정
 app.add_middleware(
