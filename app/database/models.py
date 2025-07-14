@@ -33,7 +33,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
 
     # 요청하신 추가 필드들
-    balance = Column(Float, nullable=False, default=0.0)
+    balance = Column(Float, nullable=False, default=100000000.0)
     invested_money = Column(Float, nullable=False, default=0.0)
 
     # JSON 타입을 사용하여 List[Stock]과 같은 복잡한 구조를 저장합니다.
