@@ -1,9 +1,10 @@
+import json
 import os
 
-from fastapi import APIRouter, WebSocket, Depends
+from fastapi import APIRouter, WebSocket, Depends, Path, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.session import get_db, AsyncSessionLocal
-from app.crud import crud_price
+from app.crud import crud_price, crud_user
 from app.schemas.news import News
 from app.schemas.price import PriceUpdate, PriceBase, VolumeBase
 import asyncio
@@ -11,12 +12,14 @@ import random
 import time
 import uuid
 from openai import OpenAI
+from typing import Dict
 
 router = APIRouter()
 clients = set()
 news_clients = set()
 last_news = None
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+active_users: Dict[str, WebSocket] = {}  # 이메일: WebSocket 매핑
 
 
 async def price_generator():
@@ -157,3 +160,22 @@ async def websocket_news(websocket: WebSocket):
             await websocket.receive_text()
     except:
         news_clients.remove(websocket)
+
+
+@router.websocket("/ws/user/{email}")
+async def websocket_endpoint(websocket: WebSocket, email: str = Path(...), db: AsyncSession = Depends(get_db)):
+    await websocket.accept()
+    active_users[email] = websocket
+    print(f"🔌 WebSocket 연결됨: {email}")
+
+    try:
+        while True:
+            text = await websocket.receive_text()
+            user = await crud_user.get_user_by_email(db, email)
+
+            await websocket.send_text(json.dumps(user))
+            await asyncio.sleep(30)
+
+    except WebSocketDisconnect:
+        print(f"❌ WebSocket 연결 해제됨: {email}")
+        del active_users[email]
