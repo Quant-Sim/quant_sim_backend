@@ -55,7 +55,7 @@ async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(ge
                 initial=True
             )
             await websocket.send_json(price_update.model_dump())
-            await asyncio.sleep(0.001)
+            await asyncio.sleep(0)
 
         while True:
             await websocket.receive_text()

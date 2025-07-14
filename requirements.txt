@@ -11,3 +11,4 @@ python-multipart
 sqlalchemy
 pydantic_settings
 asyncpg
+greenlet

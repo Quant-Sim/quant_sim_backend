@@ -2,15 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 
-from app.crud import crud_price
-# 수정된 import 구문: 이제 app.database에서 직접 가져올 수 있습니다.
 from app.database import Base, engine
-from app.api.endpoints import websocket, orders
-from app.database.session import AsyncSessionLocal
-from app.schemas.price import PriceUpdate, PriceBase, VolumeBase
-import time
-import random
-
+from app.api.endpoints import websocket, orders, user
 
 async def create_db_and_tables():
     """서버 시작 시 데이터베이스에 모든 테이블을 생성합니다."""
@@ -31,6 +24,7 @@ app.add_middleware(
 
 # 라우터 연결
 app.include_router(orders.router, prefix="/api/backend/order")
+app.include_router(user.router, prefix="/api/backend/user")
 # websocket.py의 router를 최상위 경로에 연결합니다.
 # 이렇게 하면 /ws 로 접속할 수 있습니다.
 app.include_router(websocket.router)
