@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 
 from app.database import Base, engine
-from app.api.endpoints import websocket, orders, user
+from app.api.endpoints import websocket, orders, user, stock
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,6 +29,7 @@ app.add_middleware(
 # 라우터 연결
 app.include_router(orders.router, prefix="/api/backend/order")
 app.include_router(user.router, prefix="/api/backend/user")
+app.include_router(stock.router, prefix="/api/backend/stock")
 # websocket.py의 router를 최상위 경로에 연결합니다.
 # 이렇게 하면 /ws 로 접속할 수 있습니다.
 app.include_router(websocket.router)

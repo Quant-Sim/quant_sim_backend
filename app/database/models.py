@@ -1,6 +1,13 @@
 from sqlalchemy import Column, Integer, String, Float, BigInteger, Boolean, JSON
 from .base import Base
 
+class Stocks(Base):
+    __tablename__ = "stocks"
+    symbol = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    sector = Column(String, nullable=True, index=True)
+    industry = Column(String, nullable=True, index=True)
+
 class PriceHistory(Base):
     __tablename__ = "price_history"
     id = Column(Integer, primary_key=True, unique=False, index=True)

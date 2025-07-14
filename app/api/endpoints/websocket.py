@@ -4,7 +4,7 @@ import os
 from fastapi import APIRouter, WebSocket, Depends, Path, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.session import get_db, AsyncSessionLocal
-from app.crud import crud_price, crud_user
+from app.crud import crud_price, crud_user, crud_stock
 from app.schemas.news import News
 from app.schemas.price import PriceUpdate, PriceBase, VolumeBase
 from app.schemas.user import User
@@ -21,12 +21,14 @@ news_clients = set()
 last_news = None
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 active_users: Dict[str, WebSocket] = {}  # 이메일: WebSocket 매핑
-symbols = ["HWG", "GAGLE", "AMAJ", "MH", "TSLR"]
 
 async def price_generator():
     print("📈 Price generator started")
     last_price = {}
+    symbols = []
     async with AsyncSessionLocal() as db:
+        symbols_json = await crud_stock.get_stock_list(db)
+        symbols = [stock["symbol"] for stock in symbols_json]
         for symbol in symbols:
             history = await crud_price.get_recent_price_history(db, symbol=symbol)
             last_price[symbol] = history[-1].close if history else 69000
