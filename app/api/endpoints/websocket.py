@@ -21,40 +21,47 @@ news_clients = set()
 last_news = None
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 active_users: Dict[str, WebSocket] = {}  # 이메일: WebSocket 매핑
-
+symbols = ["HWG", "GAGLE", "AMAJ", "MH", "TSLR"]
 
 async def price_generator():
     print("📈 Price generator started")
+    last_price = {}
     async with AsyncSessionLocal() as db:
-        history = await crud_price.get_recent_price_history(db)
-        last_price = history[-1].close if history else 69000
+        for symbol in symbols:
+            history = await crud_price.get_recent_price_history(db, symbol=symbol)
+            last_price[symbol] = history[-1].close if history else 69000
 
     while True:
         await asyncio.sleep(1)
-        t = int(time.time())
-        delta = random.randint(-30, 30)
-        open_price = last_price
-        close_price = max(1000, open_price + delta)
-        high_price = max(open_price, close_price) + random.randint(0, 10)
-        low_price = min(open_price, close_price) - random.randint(0, 10)
+        price_update_dict = {}
+        close_price_dict = {}
+        for symbol in symbols:
+            t = int(time.time())
+            delta = random.randint(-30, 30)
+            open_price = last_price[symbol]
+            close_price = max(1000, open_price + delta)
+            high_price = max(open_price, close_price) + random.randint(0, 10)
+            low_price = min(open_price, close_price) - random.randint(0, 10)
 
-        price_update = PriceUpdate(
-            candle=PriceBase(time=t, open=open_price, high=high_price, low=low_price, close=close_price),
-            volume=VolumeBase(time=t, value=random.randint(50, 150),
-                              color="#26a69a" if close_price >= open_price else "#ef5350")
-        )
-
-        async with AsyncSessionLocal() as db:
-            await crud_price.create_price_record(db, price_update)
+            price_update = PriceUpdate(
+                candle=PriceBase(time=t, open=open_price, high=high_price, low=low_price, close=close_price),
+                volume=VolumeBase(time=t, value=random.randint(50, 150),
+                                  color="#26a69a" if close_price >= open_price else "#ef5350"),
+                symbol=symbol
+            )
+            price_update_dict[symbol] = price_update
+            close_price_dict[symbol] = close_price
+            async with AsyncSessionLocal() as db:
+                await crud_price.create_price_record(db, price_update)
 
         dead_clients = set()
         for client in clients:
             try:
-                await client.send_json(price_update.model_dump())
+                await client.send_json(price_update_dict)
             except Exception:
                 dead_clients.add(client)
         clients.difference_update(dead_clients)
-        last_price = close_price
+        last_price = close_price_dict
 
 
 async def news_generator():

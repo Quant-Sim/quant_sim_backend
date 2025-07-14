@@ -20,8 +20,8 @@ async def create_price_record(db: AsyncSession, price_update: PriceUpdate):
     await db.refresh(db_price)
     return db_price
 
-async def get_recent_price_history(db: AsyncSession, seconds: int = 1200):
+async def get_recent_price_history(db: AsyncSession, seconds: int = 1200, symbol: str = None):
     start_time = int(time.time()) - seconds
-    query = select(models.PriceHistory).filter(models.PriceHistory.time >= start_time).order_by(models.PriceHistory.time)
+    query = select(models.PriceHistory).filter(models.PriceHistory.symbol == symbol).filter(models.PriceHistory.time >= start_time).order_by(models.PriceHistory.time)
     result = await db.execute(query)
     return result.scalars().all()

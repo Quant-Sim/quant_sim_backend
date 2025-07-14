@@ -3,9 +3,9 @@ from .base import Base
 
 class PriceHistory(Base):
     __tablename__ = "price_history"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, unique=False, index=True)
     symbol = Column(String, nullable=False, index=True)
-    time = Column(BigInteger, unique=True, index=True)
+    time = Column(BigInteger, unique=False, index=True)
     open = Column(Float, nullable=False)
     high = Column(Float, nullable=False)
     low = Column(Float, nullable=False)
