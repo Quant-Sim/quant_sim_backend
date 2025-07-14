@@ -6,8 +6,10 @@ from typing import List, Dict, Any
 class Stock(BaseModel):
     name: str
     symbol: str
-    value: str  # 예: '203.65'
-    change: str  # 예: '+5.63'
+    price: float
+    quantity: float
+    total: str
+    change: str
     color: str
     chartColor: str
     points: str

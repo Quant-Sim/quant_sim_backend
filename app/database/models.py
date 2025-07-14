@@ -4,6 +4,7 @@ from .base import Base
 class PriceHistory(Base):
     __tablename__ = "price_history"
     id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String, nullable=False, index=True)
     time = Column(BigInteger, unique=True, index=True)
     open = Column(Float, nullable=False)
     high = Column(Float, nullable=False)
@@ -15,6 +16,8 @@ class PriceHistory(Base):
 class OrderHistory(Base):
     __tablename__ = "order_history"
     id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String, nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
     timestamp = Column(String, nullable=False)
     time = Column(BigInteger, nullable=False)
     type = Column(String, nullable=False)

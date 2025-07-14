@@ -6,6 +6,7 @@ import time
 
 async def create_price_record(db: AsyncSession, price_update: PriceUpdate):
     db_price = models.PriceHistory(
+        symbol=price_update.symbol,
         time=price_update.candle.time,
         open=price_update.candle.open,
         high=price_update.candle.high,
