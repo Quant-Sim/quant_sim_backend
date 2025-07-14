@@ -183,7 +183,7 @@ async def websocket_user(websocket: WebSocket, email: str = Path(...), db: Async
                 portfolio=model_user.portfolio
             )
 
-            await websocket.send_text(json.dumps(cur_user))
+            await websocket.send_json(cur_user.model_dump())
             await asyncio.sleep(30)
 
     except WebSocketDisconnect:
