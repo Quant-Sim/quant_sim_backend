@@ -13,6 +13,7 @@ class VolumeBase(BaseModel):
     color: str
 
 class PriceUpdate(BaseModel):
+    symbol: str
     candle: PriceBase
     volume: VolumeBase
     initial: bool = False

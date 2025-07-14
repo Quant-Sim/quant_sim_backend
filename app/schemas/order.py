@@ -6,10 +6,14 @@ class OrderBase(BaseModel):
     quantity: float
 
 class OrderCreate(OrderBase):
+    user_id: int
+    symbol: str
     pass
 
 class Order(OrderBase):
     id: int
+    user_id: int
+    symbol: str
     timestamp: str
     time: int
     total: float
