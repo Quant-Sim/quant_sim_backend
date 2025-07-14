@@ -7,6 +7,7 @@ from app.database.session import get_db, AsyncSessionLocal
 from app.crud import crud_price, crud_user
 from app.schemas.news import News
 from app.schemas.price import PriceUpdate, PriceBase, VolumeBase
+from app.schemas.user import User
 import asyncio
 import random
 import time
@@ -163,17 +164,26 @@ async def websocket_news(websocket: WebSocket):
 
 
 @router.websocket("/ws/user/{email}")
-async def websocket_endpoint(websocket: WebSocket, email: str = Path(...), db: AsyncSession = Depends(get_db)):
+async def websocket_user(websocket: WebSocket, email: str = Path(...), db: AsyncSession = Depends(get_db)):
     await websocket.accept()
     active_users[email] = websocket
     print(f"🔌 WebSocket 연결됨: {email}")
 
     try:
         while True:
-            text = await websocket.receive_text()
-            user = await crud_user.get_user_by_email(db, email)
+            model_user = await crud_user.get_user_by_email(db, email)
+            cur_user = User(
+                id=model_user.id,
+                username=model_user.username,
+                email=model_user.email,
+                full_name=model_user.full_name,
+                balance=model_user.balance,
+                invested_money=model_user.invested_money,
+                stocks=model_user.stocks,
+                portfolio=model_user.portfolio
+            )
 
-            await websocket.send_text(json.dumps(user))
+            await websocket.send_text(json.dumps(cur_user))
             await asyncio.sleep(30)
 
     except WebSocketDisconnect:
