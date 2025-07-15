@@ -1,5 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, model_serializer
 from typing import List, Dict, Any
+import json
 
 
 # 프론트엔드에서 사용하는 Stock 데이터 구조에 대한 스키마
@@ -8,8 +9,8 @@ class Stock(BaseModel):
     symbol: str
     price: float
     quantity: float
-    total: str
-    change: str
+    total: float
+    change: float
     color: str
     chartColor: str
     points: str

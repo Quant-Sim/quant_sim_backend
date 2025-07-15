@@ -15,20 +15,43 @@ import uuid
 from openai import OpenAI
 from typing import Dict
 
+
+class DataClient:
+    def __init__(self, websocket: WebSocket):
+        self.websocket = websocket
+        self.is_bound = False
+
+    def send_json(self, data: Dict):
+        return self.websocket.send_json(data)
+
+    def bind(self):
+        self.is_bound = True
+
+    def accept(self):
+        return self.websocket.accept()
+
+    def close(self):
+        return self.websocket.close()
+
+    def receive_text(self):
+        return self.websocket.receive_text()
+
+
 router = APIRouter()
-clients = set()
+data_clients = set()
 news_clients = set()
 last_news = None
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 active_users: Dict[str, WebSocket] = {}  # 이메일: WebSocket 매핑
+
 
 async def price_generator():
     print("📈 Price generator started")
     last_price = {}
     symbols = []
     async with AsyncSessionLocal() as db:
-        symbols_json = await crud_stock.get_stock_list(db)
-        symbols = [stock["symbol"] for stock in symbols_json]
+        stocks = await crud_stock.get_stock_list(db)
+        symbols = [stock.symbol for stock in stocks]
         for symbol in symbols:
             history = await crud_price.get_recent_price_history(db, symbol=symbol)
             last_price[symbol] = history[-1].close if history else 69000
@@ -37,6 +60,7 @@ async def price_generator():
         await asyncio.sleep(1)
         price_update_dict = {}
         close_price_dict = {}
+        price_update = None
         for symbol in symbols:
             t = int(time.time())
             delta = random.randint(-30, 30)
@@ -49,20 +73,26 @@ async def price_generator():
                 candle=PriceBase(time=t, open=open_price, high=high_price, low=low_price, close=close_price),
                 volume=VolumeBase(time=t, value=random.randint(50, 150),
                                   color="#26a69a" if close_price >= open_price else "#ef5350"),
+                initial=False,
                 symbol=symbol
             )
-            price_update_dict[symbol] = price_update
+            price_update_dict[symbol] = price_update.model_dump()
             close_price_dict[symbol] = close_price
+
             async with AsyncSessionLocal() as db:
                 await crud_price.create_price_record(db, price_update)
 
         dead_clients = set()
-        for client in clients:
+        for client in data_clients:
             try:
+                if not client.is_bound:
+                    print("not bound client, skipping")
+                    continue
                 await client.send_json(price_update_dict)
-            except Exception:
+            except Exception as e:
+                print("Price WebSocket 연결 오류, 클라이언트 제거:", e)
                 dead_clients.add(client)
-        clients.difference_update(dead_clients)
+        data_clients.difference_update(dead_clients)
         last_price = close_price_dict
 
 
@@ -139,24 +169,38 @@ async def news_generator():
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
-    await websocket.accept()
-    clients.add(websocket)
+    client = DataClient(websocket)
+    await client.accept()
+    data_clients.add(client)
     try:
-        history = await crud_price.get_recent_price_history(db, seconds=1200)
-        for record in history:
-            price_update = PriceUpdate(
-                candle=PriceBase(time=record.time, open=record.open, high=record.high, low=record.low,
-                                 close=record.close),
-                volume=VolumeBase(time=record.time, value=record.volume, color=record.color),
-                initial=True
-            )
-            await websocket.send_json(price_update.model_dump())
-            await asyncio.sleep(0)
+        stocks = []
+        async with AsyncSessionLocal() as db:
+            stocks = await crud_stock.get_stock_list(db)
 
+        symbols = [stock.symbol for stock in stocks]
+        response = {}
+        for symbol in symbols:
+            response[symbol] = []
+            async with AsyncSessionLocal() as db_session_for_history:
+                history = await crud_price.get_recent_price_history(db_session_for_history, seconds=1200, symbol=symbol)
+            for record in history:
+                price_update = PriceUpdate(
+                    candle=PriceBase(time=record.time, open=record.open, high=record.high, low=record.low,
+                                     close=record.close),
+                    volume=VolumeBase(time=record.time, value=record.volume, color=record.color),
+                    initial=True,
+                    symbol=symbol
+                )
+                response[symbol].append(price_update.model_dump())
+        await asyncio.sleep(0)
+        await client.send_json(response)
+        client.bind()
         while True:
-            await websocket.receive_text()
-    except Exception:
-        clients.remove(websocket)
+            await client.receive_text()
+    except Exception as e:
+        print("Init history WebSocket 연결 오류:", e)
+        await client.close()
+        data_clients.discard(client)
 
 
 @router.websocket("/ws/news")
@@ -176,7 +220,7 @@ async def websocket_news(websocket: WebSocket):
 async def websocket_user(websocket: WebSocket, email: str = Path(...), db: AsyncSession = Depends(get_db)):
     await websocket.accept()
     active_users[email] = websocket
-    print(f"🔌 WebSocket 연결됨: {email}")
+    print(f"🔌 User WebSocket 연결됨: {email}")
 
     try:
         while True:
@@ -196,5 +240,5 @@ async def websocket_user(websocket: WebSocket, email: str = Path(...), db: Async
             await asyncio.sleep(30)
 
     except WebSocketDisconnect:
-        print(f"❌ WebSocket 연결 해제됨: {email}")
-        del active_users[email]
+        print(f"❌ User WebSocket 연결 해제됨: {email}")
+        active_users.pop(email)

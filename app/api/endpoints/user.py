@@ -42,15 +42,15 @@ async def read_users(
     return users
 
 
-@router.get("/{user_id}", response_model=user_schema.User)
+@router.get("/{email}", response_model=user_schema.User)
 async def read_user(
-        user_id: int,
+        email: str,
         db: AsyncSession = Depends(get_db)
 ):
     """
     특정 ID를 가진 사용자의 정보를 조회합니다.
     """
-    db_user = await crud_user.get_user_by_id(db, user_id=user_id)
+    db_user = await crud_user.get_user_by_email(db, email=email)
     if db_user is None:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
     return db_user

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, BigInteger, Boolean, JSON
+from sqlalchemy import Column, Integer, String, Float, BigInteger, Boolean, JSON, ARRAY
 from .base import Base
 
 class Stocks(Base):

@@ -2,17 +2,42 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import models
 from app.schemas.order import OrderCreate
+from app.schemas.user import Stock
 import time
 import random
-from fastapi import HTTPException
+from fastapi import HTTPException, status
+from sqlalchemy.orm.attributes import flag_modified # 1. flag_modified 임포트
 
+colors = [
+    'bg-green-100',
+    'bg-blue-100',
+    'bg-red-100',
+    'bg-yellow-100',
+    'bg-purple-100',
+    'bg-pink-100',
+    'bg-orange-100',
+    'bg-teal-100',
+    'bg-indigo-100',
+    'bg-gray-100',
+]
 async def create_order(db: AsyncSession, order: OrderCreate):
     timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
     total_val = round(order.price * order.quantity)
 
     result = await db.execute(select(models.User).where(models.User.id == order.user_id))
     user = result.scalar_one_or_none()
-    await db.refresh(user)  # 👈 여기에 넣으면 됩니다
+
+    stock_db = await db.execute(select(models.Stocks).where(models.Stocks.symbol == order.symbol))
+    target_stock = stock_db.scalar_one_or_none()
+
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {order.user_id} not found"
+        )
+    if not target_stock:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Stock with symbol {order.symbol} not found")
 
     if order.type == '매수':
         if user.balance < total_val:
@@ -28,16 +53,18 @@ async def create_order(db: AsyncSession, order: OrderCreate):
                 exists = True
                 break
         if not exists:
-            user.stocks.append({
-                "name": order.name,
-                "symbol": order.symbol,
-                "price": order.price,
-                "quantity": order.quantity,
-                "total": total_val,
-                "color": "green",
-                "chartColor": "#" + ''.join(random.choices('0123456789abcdef', k=6)),
-                "points": "0,0"
-            })
+            stock = Stock(
+                name=target_stock.name,
+                symbol=order.symbol,
+                price=order.price,
+                quantity=order.quantity,
+                total=total_val,
+                change=0.0,
+                color=colors[random.randint(0, len(colors) - 1)],
+                chartColor="#" + ''.join(random.choices('0123456789abcdef', k=6)),
+                points="0,0"
+            )
+            user.stocks.append(stock.model_dump())
     elif order.type == '매도':
         stock_found = False
         for stock in user.stocks:
@@ -53,6 +80,10 @@ async def create_order(db: AsyncSession, order: OrderCreate):
                 break
         if not stock_found:
             raise HTTPException(status_code=400, detail="해당 주식을 보유하고 있지 않습니다.")
+    else :
+        raise HTTPException(status_code=400, detail="유효하지 않은 주문 유형입니다.")
+
+    flag_modified(user, "stocks")
 
     db_order = models.OrderHistory(
         user_id=order.user_id,
@@ -65,8 +96,10 @@ async def create_order(db: AsyncSession, order: OrderCreate):
         total=total_val
     )
 
+    db.add(user)
     db.add(db_order)
     await db.commit()
+    await db.refresh(user)
     await db.refresh(db_order)
     return db_order
 
