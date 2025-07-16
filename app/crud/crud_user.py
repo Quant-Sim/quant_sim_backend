@@ -35,7 +35,9 @@ async def get_user_by_email(db: AsyncSession, email: str):
     """
     query = select(models.User).filter(models.User.email == email)
     result = await db.execute(query)
-    return result.scalars().first()
+    user = result.scalars().first()
+    await db.refresh(user)
+    return user
 
 async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100):
     """

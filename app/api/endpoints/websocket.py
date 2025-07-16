@@ -237,7 +237,7 @@ async def websocket_user(websocket: WebSocket, email: str = Path(...), db: Async
             )
 
             await websocket.send_json(cur_user.model_dump())
-            await asyncio.sleep(30)
+            await asyncio.sleep(1)
 
     except WebSocketDisconnect:
         print(f"❌ User WebSocket 연결 해제됨: {email}")
