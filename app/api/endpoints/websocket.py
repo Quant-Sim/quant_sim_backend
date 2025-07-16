@@ -4,8 +4,9 @@ import os
 from fastapi import APIRouter, WebSocket, Depends, Path, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.session import get_db, AsyncSessionLocal
-from app.crud import crud_price, crud_user, crud_stock
+from app.crud import crud_price, crud_user, crud_stock, crud_order
 from app.schemas.news import News
+from app.schemas.order import Order
 from app.schemas.price import PriceUpdate, PriceBase, VolumeBase
 from app.schemas.user import User
 import asyncio
@@ -40,6 +41,7 @@ class DataClient:
 router = APIRouter()
 data_clients = set()
 news_clients = set()
+order_clients = set()
 last_news = None
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 active_users: Dict[str, WebSocket] = {}  # 이메일: WebSocket 매핑
@@ -242,3 +244,40 @@ async def websocket_user(websocket: WebSocket, email: str = Path(...), db: Async
     except WebSocketDisconnect:
         print(f"❌ User WebSocket 연결 해제됨: {email}")
         active_users.pop(email)
+
+
+@router.websocket("/ws/order")
+async def websocket_order(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
+    await websocket.accept()
+    order_clients.add(websocket)
+    print(f"🔌 Order WebSocket 연결됨 ")
+
+    try:
+        while True:
+            orders = {}
+            stocks = await crud_stock.get_stock_list(db)
+            for stock in stocks:
+                orders_target = await crud_order.get_orders(db, symbol=stock.symbol)
+                order_json_list = []
+                for order in orders_target:
+                    order_schema = Order(
+                        id=order.id,
+                        user_id=order.user_id,
+                        symbol=order.symbol,
+                        timestamp=order.timestamp,
+                        time=order.time,
+                        total=order.total,
+                        type=order.type,
+                        price=order.price,
+                        quantity=order.quantity
+                    )
+                    order_json_list.append(order_schema.model_dump())
+                orders[stock.symbol] = order_json_list
+
+            await websocket.send_json(orders)
+            await asyncio.sleep(1)
+
+    except WebSocketDisconnect:
+        print(f"❌ Order WebSocket 연결 해제됨")
+        await websocket.close()
+        order_clients.remove(websocket)

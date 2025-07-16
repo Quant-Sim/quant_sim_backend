@@ -6,7 +6,7 @@ from app.schemas.user import Stock
 import time
 import random
 from fastapi import HTTPException, status
-from sqlalchemy.orm.attributes import flag_modified # 1. flag_modified 임포트
+from sqlalchemy.orm.attributes import flag_modified  # 1. flag_modified 임포트
 
 colors = [
     'bg-green-100',
@@ -20,6 +20,8 @@ colors = [
     'bg-indigo-100',
     'bg-gray-100',
 ]
+
+
 async def create_order(db: AsyncSession, order: OrderCreate):
     timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
     total_val = round(order.price * order.quantity)
@@ -29,7 +31,6 @@ async def create_order(db: AsyncSession, order: OrderCreate):
 
     stock_db = await db.execute(select(models.Stocks).where(models.Stocks.symbol == order.symbol))
     target_stock = stock_db.scalar_one_or_none()
-
 
     if not user:
         raise HTTPException(
@@ -80,7 +81,7 @@ async def create_order(db: AsyncSession, order: OrderCreate):
                 break
         if not stock_found:
             raise HTTPException(status_code=400, detail="해당 주식을 보유하고 있지 않습니다.")
-    else :
+    else:
         raise HTTPException(status_code=400, detail="유효하지 않은 주문 유형입니다.")
 
     flag_modified(user, "stocks")
@@ -103,10 +104,13 @@ async def create_order(db: AsyncSession, order: OrderCreate):
     await db.refresh(db_order)
     return db_order
 
+
 async def get_orders(db: AsyncSession, limit: int = 100, symbol: str = None):
-    query = select(models.OrderHistory).filter(models.OrderHistory.symbol == symbol).order_by(models.OrderHistory.id.desc()).limit(limit)
+    query = select(models.OrderHistory).filter(models.OrderHistory.symbol == symbol).order_by(
+        models.OrderHistory.id.desc()).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
+
 
 async def get_user_orders(db: AsyncSession, symbol: str, user_id: int):
     query = select(models.OrderHistory).filter(
@@ -114,4 +118,6 @@ async def get_user_orders(db: AsyncSession, symbol: str, user_id: int):
         models.OrderHistory.user_id == user_id
     ).order_by(models.OrderHistory.id.desc())
     result = await db.execute(query)
-    return result.scalars().all()
+    orders = result.scalars().all()
+    await db.refresh(orders)
+    return orders
