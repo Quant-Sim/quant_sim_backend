@@ -44,49 +44,79 @@ last_news = None
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 active_users: Dict[str, WebSocket] = {}  # 이메일: WebSocket 매핑
 
+# 심볼별 시장 상태 저장
+symbol_states: Dict[str, Dict[str, float]] = {}
+
 
 async def price_generator():
     print("📈 Price generator started")
-    last_price = {}
     symbols = []
+    last_price: Dict[str, float] = {}
+
     async with AsyncSessionLocal() as db:
         stocks = await crud_stock.get_stock_list(db)
         symbols = [stock.symbol for stock in stocks]
         for symbol in symbols:
             history = await crud_price.get_recent_price_history(db, symbol=symbol)
             last_price[symbol] = history[-1].close if history else 69000
+            # 초기 상태 설정
+            symbol_states[symbol] = {
+                "trend": random.choice([-1, 1]),
+                "volatility": random.uniform(0.5, 2.0),
+            }
 
     while True:
         await asyncio.sleep(1)
-        price_update_dict = {}
-        close_price_dict = {}
-        price_update = None
+        price_update_dict: Dict[str, Dict] = {}
+        close_price_dict: Dict[str, float] = {}
+
         for symbol in symbols:
             t = int(time.time())
-            delta = random.randint(-30, 30)
-            open_price = last_price[symbol]
-            close_price = max(1000, open_price + delta)
+            state = symbol_states[symbol]
+            base_price = last_price[symbol]
+
+            # 상태 기반 변화량 계산
+            trend = state["trend"]
+            volatility = state["volatility"]
+            sigma = base_price * volatility / 100
+            delta = random.gauss(mu=trend * sigma * 0.1, sigma=sigma * 0.5)
+
+            # 캔들 생성
+            open_price = base_price
+            close_price = max(1000, int(open_price + delta))
             high_price = max(open_price, close_price) + random.randint(0, 10)
             low_price = min(open_price, close_price) - random.randint(0, 10)
 
+            # 가격 업데이트 객체
             price_update = PriceUpdate(
                 candle=PriceBase(time=t, open=open_price, high=high_price, low=low_price, close=close_price),
-                volume=VolumeBase(time=t, value=random.randint(50, 150),
-                                  color="#26a69a" if close_price >= open_price else "#ef5350"),
+                volume=VolumeBase(
+                    time=t,
+                    value=random.randint(100, 500),
+                    color="#26a69a" if close_price >= open_price else "#ef5350"
+                ),
                 initial=False,
                 symbol=symbol
             )
+
             price_update_dict[symbol] = price_update.model_dump()
             close_price_dict[symbol] = close_price
 
+            # DB 저장
             async with AsyncSessionLocal() as db:
                 await crud_price.create_price_record(db, price_update)
 
+            # 상태 갱신
+            if random.random() < 0.05:
+                state["trend"] *= -1
+            if random.random() < 0.1:
+                state["volatility"] = random.uniform(0.5, 2.0)
+
+        # 클라이언트 전송
         dead_clients = set()
         for client in data_clients:
             try:
                 if not client.is_bound:
-                    print("not bound client, skipping")
                     continue
                 await client.send_json(price_update_dict)
             except Exception as e:
@@ -108,24 +138,18 @@ async def news_generator():
 
     while True:
         print("📰 News generating...")
-        await asyncio.sleep(random.randint(20, 40))  # 뉴스 간격
+        await asyncio.sleep(random.randint(20, 40))
 
         prompt = random.choice(headlines)
 
-        model = "gpt-4"  # 최신 모델 사용
+        model = "gpt-4"
         messages = [
             {"role": "system",
-             "content": "주식 시장 관련 헤드라인을 1개 작성해줘. 헤드라인은 20자 이내고 주목을 끌어야 하며, 긍정적 또는 부정적인 영향을 줄 수 있어야 해. 내용은 실제 주식 종목이나 실제 기업, 실제 인물 실명을 언급하지 말고 만들어줘"
-                        "예시 :"
-                        "신제품 출시로 매출 기대감 ↑"
-                        "CEO 교체 발표, 경영 전략 변화 예고"
-                        "글로벌 공급망 개선, 수익성 회복 조짐"
-                        "시장 점유율 하락 우려"
-                        "경기 침체 우려로 투자심리 위축"
-                        "미 대통령, 기업 세금 인상 제안으로 주식 시장 흔들"
-             },
-            {"role": "user",
-             "content": prompt},
+             "content":
+             "주식 시장 관련 헤드라인을 1개 작성해줘. 헤드라인은 20자 이내고 주목을 끌어야 "
+             "하며, 긍정적 또는 부정적인 영향을 줄 수 있어야 해. 내용은 실제 주식 종목이나 "
+             "실제 기업, 실제 인물 실명을 언급하지 말고 만들어줘"},
+            {"role": "user", "content": prompt},
         ]
         response_format = {"type": "text"}
 
@@ -135,16 +159,14 @@ async def news_generator():
                 response_format=response_format,
                 messages=messages
             )
-            # 응답 객체가 예상대로 왔는지 확인
             if response and response.choices and response.choices[0].message.content:
                 headline = response.choices[0].message.content.strip()
             else:
-                headline = "기본 헤드라인입니다."  # fallback
+                headline = "기본 헤드라인입니다."
         except Exception as e:
             print("OpenAI 오류:", e)
-            headline = prompt  # fallback
+            headline = prompt
 
-        # 감정 및 영향도 계산
         sentiment = round(random.uniform(-1, 1), 2)
         impact = random.randint(1, 10)
 
@@ -173,21 +195,23 @@ async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(ge
     await client.accept()
     data_clients.add(client)
     try:
-        stocks = []
+        symbols = []
         async with AsyncSessionLocal() as db:
             stocks = await crud_stock.get_stock_list(db)
+            symbols = [stock.symbol for stock in stocks]
 
-        symbols = [stock.symbol for stock in stocks]
         response = {}
         for symbol in symbols:
             response[symbol] = []
             async with AsyncSessionLocal() as db_session_for_history:
-                history = await crud_price.get_recent_price_history(db_session_for_history, seconds=1200, symbol=symbol)
+                history = await crud_price.get_recent_price_history(
+                    db_session_for_history, seconds=1200, symbol=symbol)
             for record in history:
                 price_update = PriceUpdate(
-                    candle=PriceBase(time=record.time, open=record.open, high=record.high, low=record.low,
-                                     close=record.close),
-                    volume=VolumeBase(time=record.time, value=record.volume, color=record.color),
+                    candle=PriceBase(time=record.time, open=record.open,
+                                     high=record.high, low=record.low, close=record.close),
+                    volume=VolumeBase(time=record.time,
+                                      value=record.volume, color=record.color),
                     initial=True,
                     symbol=symbol
                 )
@@ -235,10 +259,8 @@ async def websocket_user(websocket: WebSocket, email: str = Path(...), db: Async
                 stocks=model_user.stocks,
                 portfolio=model_user.portfolio
             )
-
             await websocket.send_json(cur_user.model_dump())
             await asyncio.sleep(30)
-
     except WebSocketDisconnect:
         print(f"❌ User WebSocket 연결 해제됨: {email}")
         active_users.pop(email)
