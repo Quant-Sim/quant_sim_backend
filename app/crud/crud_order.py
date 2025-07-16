@@ -70,6 +70,7 @@ async def create_order(db: AsyncSession, order: OrderCreate):
                 stock["quantity"] -= order.quantity
                 stock["total"] = stock["quantity"] * order.price
                 user.balance += total_val
+                user.invested_money -= stock["quantity"] * stock["price"]
                 if stock["quantity"] == 0:
                     user.stocks.remove(stock)
                 stock_found = True
@@ -80,6 +81,8 @@ async def create_order(db: AsyncSession, order: OrderCreate):
         raise HTTPException(status_code=400, detail="유효하지 않은 주문 유형입니다.")
 
     flag_modified(user, "stocks")
+    flag_modified(user, "invested_money")
+    flag_modified(user, "balance")
 
     db_order = models.OrderHistory(
         user_id=order.user_id,

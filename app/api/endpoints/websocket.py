@@ -56,7 +56,7 @@ async def price_generator():
         symbols = [stock.symbol for stock in stocks]
         for symbol in symbols:
             history = await crud_price.get_recent_price_history(db, symbol=symbol)
-            last_price[symbol] = history[-1].close if history else 69000
+            last_price[symbol] = history[-1].close if history else random.randint(0, 200000)
 
     while True:
         await asyncio.sleep(1)
@@ -65,8 +65,8 @@ async def price_generator():
         price_update = None
         for symbol in symbols:
             t = int(time.time())
-            delta = random.randint(-30, 30)
             open_price = last_price[symbol]
+            delta = random.randint(-30, 30)
             close_price = max(1000, open_price + delta)
             high_price = max(open_price, close_price) + random.randint(0, 10)
             low_price = min(open_price, close_price) - random.randint(0, 10)
