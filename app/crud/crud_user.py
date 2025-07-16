@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import models
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, PortfolioDataPoint
 from app.security import get_password_hash
 
 async def create_user(db: AsyncSession, user: UserCreate):
@@ -13,7 +13,54 @@ async def create_user(db: AsyncSession, user: UserCreate):
         username=user.username,
         email=user.email,
         hashed_password=hashed_password,
-        full_name=user.full_name
+        full_name=user.full_name,
+        portfolio= {
+            {
+                '1D': [
+                    PortfolioDataPoint(name='10 am', value=0),
+                    PortfolioDataPoint(name='11 am', value=0),
+                    PortfolioDataPoint(name='12 pm', value=0),
+                    PortfolioDataPoint(name='01 pm', value=0),
+                    PortfolioDataPoint(name='02 pm', value=0),
+                    PortfolioDataPoint(name='03 pm', value=0),
+                    PortfolioDataPoint(name='04 pm', value=0),
+                ],
+                '5D': [
+                    PortfolioDataPoint(name='Mon', value=0),
+                    PortfolioDataPoint(name='Tue', value=0),
+                    PortfolioDataPoint(name='Wed', value=0),
+                    PortfolioDataPoint(name='Thu', value=0),
+                    PortfolioDataPoint(name='Fri', value=0),
+                ],
+                '1M': [
+                    PortfolioDataPoint(name='Week 1', value=0),
+                    PortfolioDataPoint(name='Week 2', value=0),
+                    PortfolioDataPoint(name='Week 3', value=0),
+                    PortfolioDataPoint(name='Week 4', value=0),
+                ],
+                '6M': [
+                    PortfolioDataPoint(name='Jan', value=0),
+                    PortfolioDataPoint(name='Feb', value=0),
+                    PortfolioDataPoint(name='Mar', value=0),
+                    PortfolioDataPoint(name='Apr', value=0),
+                    PortfolioDataPoint(name='May', value=0),
+                    PortfolioDataPoint(name='Jun', value=0),
+                ],
+                '1Y': [
+                    PortfolioDataPoint(name='2024 Q1', value=0),
+                    PortfolioDataPoint(name='2024 Q2', value=0),
+                    PortfolioDataPoint(name='2024 Q3', value=0),
+                    PortfolioDataPoint(name='2024 Q4', value=0),
+                ],
+                'Max': [
+                    PortfolioDataPoint(name='2022', value=0),
+                    PortfolioDataPoint(name='2023', value=0),
+                    PortfolioDataPoint(name='2024', value=0),
+                    PortfolioDataPoint(name='2025', value=0),
+                ],
+            }
+
+        }
         # balance, invested_money, stocks, portfolio는 모델에서 정의한 기본값으로 생성됩니다.
     )
     db.add(db_user)
